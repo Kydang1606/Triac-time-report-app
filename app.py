@@ -68,7 +68,7 @@ translations = {
         "percentage_change": "Percentage Change",
         "config_not_found": "Configuration sheet '{sheet_name}' not found in Excel file.",
         "raw_data_not_found": "Raw Data sheet not found in Excel file.",
-        "reading_processing_data": "Reading and processing data..."
+        "reading_processing_data": "Reading and processing data...",
     },
     "vi": {
         "app_title": "Ứng dụng Báo cáo Thời gian Triac",
