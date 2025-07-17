@@ -333,7 +333,6 @@ if st.session_state.authenticated: # Đảm bảo chỉ đọc file sau khi xác
                                         st.success(current_translations["export_success"])
                                     except Exception as e:
                                         st.error(current_translations["export_error"].format(error=e))
-                        
                         with col_pdf_std: # <--- DÒNG NÀY RẤT CÓ THỂ LÀ DÒNG 380
                             if st.button(current_translations["export_pdf"], key="export_standard_pdf_btn"): # <--- DÒNG 381
                                 with st.spinner(current_translations["loading_charts_data"]):
