@@ -319,15 +319,38 @@ current_translations = translations[st.session_state.language]
 
 st.title(current_translations["app_title"])
 
-# --- Authentication (Keep as is) ---
-AUTHORIZED_EMAILS = [
-    "long.lehoang@triac.vn", "hien.nguyen@triac.vn", "dat.nguyenhoang@triac.vn",
-    "phu.tran@triac.vn", "nhung.le@triac.vn", "phuong.nguyen@triac.vn",
-    "it.support@triac.vn"
-]
+# --- Hàm đọc email từ file CSV ---
+# Đặt hàm này ở đây, trước khi bạn cần dùng AUTHORIZED_EMAILS
+def load_authorized_emails(csv_file_path):
+    # Sử dụng st.cache_data để cache kết quả đọc file, tránh đọc lại mỗi lần rerun
+    @st.cache_data(ttl=300) # Cache trong 300 giây (5 phút), hoặc điều chỉnh
+    def _load_emails(path):
+        if not os.path.exists(path):
+            st.error(f"Lỗi: File invited_emails.csv không tìm thấy tại {path}. Vui lòng đảm bảo file tồn tại.")
+            return []
+        try:
+            # Đọc CSV không có header, và đặt tên cột là 'email'
+            df_emails = pd.read_csv(path, header=None, names=['email'])
+            # Chuyển tất cả email thành chữ thường và loại bỏ khoảng trắng thừa
+            return [email.strip().lower() for email in df_emails['email'].tolist() if pd.notna(email)]
+        except Exception as e:
+            st.error(f"Lỗi khi đọc file invited_emails.csv: {e}. Vui lòng kiểm tra định dạng file.")
+            return []
+    return _load_emails(csv_file_path)
 
+# --- Xác định đường dẫn và tải danh sách email ---
+# Đảm bảo file 'invited_emails.csv' nằm cùng cấp với 'app.py'
+csv_path_for_auth = "invited_emails.csv"
+AUTHORIZED_EMAILS = load_authorized_emails(csv_path_for_auth)
+
+# --- Authentication (Phần này sẽ được giữ lại, nhưng AUTHORIZED_EMAILS đã được tải động) ---
 def authenticate_user(email):
-    return email.lower() in AUTHORIZED_EMAILS
+    # Thêm debug logs để kiểm tra
+    # st.write(f"DEBUG: Email nhập vào (raw): '{email}'")
+    processed_email = email.lower().strip()
+    # st.write(f"DEBUG: Email đã xử lý: '{processed_email}'")
+    # st.write(f"DEBUG: Danh sách email được phép: {AUTHORIZED_EMAILS}")
+    return processed_email in AUTHORIZED_EMAILS
 
 if 'authenticated' not in st.session_state:
     st.session_state.authenticated = False
