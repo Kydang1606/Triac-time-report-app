@@ -378,6 +378,47 @@ if st.session_state.authenticated: # Đảm bảo chỉ đọc file sau khi xác
                                     except Exception as e:
                                         st.error(current_translations["export_error"].format(error=e))
                         with col_pdf_std:
+if st.button(current_translations["apply_filters"], key="apply_standard_filters"):
+                if not selected_projects_standard or not selected_years or not selected_month_standard:
+                    st.warning("Please select at least one project, a year, and a month.")
+                else: # <-- This 'else' belongs to the 'if not selected_projects...'
+                    filtered_df_standard = apply_filters(
+                        st.session_state['raw_df'],
+                        years=selected_years,
+                        months=[selected_month_standard],
+                        projects=selected_projects_standard
+                    )
+
+                    # Dòng 'if filtered_df_standard.empty:' này có ELSE của nó.
+                    if filtered_df_standard.empty:
+                        st.info(current_translations["no_data_for_selected_filters"])
+                    else: # <--- ĐÂY LÀ KHỐI ELSE MÀ BẠN GẶP LỖI
+                        st.subheader(current_translations["filtered_data_header"])
+                        st.dataframe(filtered_df_standard)
+
+                        # Export options
+                        col_excel_std, col_pdf_std = st.columns(2)
+                        with col_excel_std:
+                            if st.button(current_translations["export_excel"], key="export_standard_excel_btn"):
+                                with st.spinner(current_translations["loading_charts_data"]):
+                                    try:
+                                        excel_buffer = export_standard_report_excel(
+                                            filtered_df_standard,
+                                            st.session_state['config_data'],
+                                            current_translations,
+                                            standard_report_year_mode == current_translations["year_over_year"]
+                                        )
+                                        st.download_button(
+                                            label=current_translations["export_excel"],
+                                            data=excel_buffer.getvalue(),
+                                            file_name=f"{sanitize_filename(current_translations['standard_report_tab'])}_{selected_month_standard}_{'-'.join(map(str, selected_years))}.xlsx",
+                                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                                            key="download_standard_excel"
+                                        )
+                                        st.success(current_translations["export_success"])
+                                    except Exception as e:
+                                        st.error(current_translations["export_error"].format(error=e))
+                        with col_pdf_std:
                             if st.button(current_translations["export_pdf"], key="export_standard_pdf_btn"): # Đổi key để tránh xung đột
                                 with st.spinner(current_translations["loading_charts_data"]):
                                     try:
@@ -397,9 +438,14 @@ if st.session_state.authenticated: # Đảm bảo chỉ đọc file sau khi xác
                                         st.success(current_translations["export_success"])
                                     except Exception as e:
                                         st.error(current_translations["export_error"].format(error=e))
-                    else:
-                        st.info(current_translations["no_data_for_export"])
-
+                        # Dòng 'else' mà bạn đang gặp lỗi phải được XÓA khỏi vị trí này.
+                        # Nó không thuộc về khối if st.button(...) này.
+                        # Loại bỏ hoặc thụt lề đúng để nó thuộc về if filtered_df_standard.empty:
+                        # else:  <-- DÒNG NÀY LÀ NGUYÊN NHÂN LỖI CỦA BẠN. HÃY XÓA NÓ ĐI.
+                        #    st.info(current_translations["no_data_for_export"])
+            # else của if st.button(current_translations["apply_filters"], key="apply_standard_filters"):
+            else: # <--- Đây là else đúng của if st.button("apply filters")
+                 st.info("Please apply filters to see report options.") # Một thông báo bổ sung.
 
     with tab3:
         st.header(current_translations["comparison_report_tab"])
