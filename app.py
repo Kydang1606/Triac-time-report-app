@@ -231,7 +231,12 @@ if st.session_state.authenticated: # Đảm bảo chỉ đọc file sau khi xác
             # Lấy danh sách các dự án, năm, tháng từ dữ liệu
             all_project_names = sorted(raw_df['Project name'].unique().tolist())
             all_years_in_data = sorted(raw_df['Year'].unique().tolist())
-            all_months_in_data = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
+            
+            # Sắp xếp lại thứ tự tháng nếu cần (đã là tên tháng)
+            month_order = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
+            # Lọc các tháng thực sự có trong dữ liệu và sắp xếp theo month_order
+            all_months_in_data = [month for month in month_order if month in raw_df['Month'].unique()]
+
 
             st.session_state['all_project_names'] = all_project_names
             st.session_state['all_years_in_data'] = all_years_in_data
@@ -271,14 +276,19 @@ if st.session_state.authenticated: # Đảm bảo chỉ đọc file sau khi xác
             st.dataframe(hours_by_project)
 
             # Total Hours by Month (đảm bảo sắp xếp đúng theo thứ tự tháng)
-            month_order = {
+            month_order_map = {
                 'January': 1, 'February': 2, 'March': 3, 'April': 4, 'May': 5, 'June': 6,
                 'July': 7, 'August': 8, 'September': 9, 'October': 10, 'November': 11, 'December': 12
             }
             # Tạo cột số tháng để sắp xếp
             temp_df_for_month_sort = st.session_state['raw_df'].copy()
-            temp_df_for_month_sort['Month_Num'] = temp_df_for_month_sort['Month'].map(month_order)
-            hours_by_month = temp_df_for_month_sort.groupby('Month')['Hours'].sum().loc[temp_df_for_month_sort.sort_values('Month_Num')['Month'].unique()]
+            temp_df_for_month_sort['Month_Num'] = temp_df_for_month_sort['Month'].map(month_order_map)
+            
+            # Groupby và sắp xếp theo Month_Num, sau đó chỉ lấy cột Month
+            hours_by_month_df = temp_df_for_month_sort.groupby('Month')['Hours'].sum().reset_index()
+            hours_by_month_df['Month_Num'] = hours_by_month_df['Month'].map(month_order_map)
+            hours_by_month = hours_by_month_df.sort_values('Month_Num').set_index('Month')['Hours']
+            
             st.subheader(current_translations["hours_by_month_title"])
             st.dataframe(hours_by_month)
 
@@ -291,11 +301,118 @@ if st.session_state.authenticated: # Đảm bảo chỉ đọc file sau khi xác
         if 'all_years_in_data' not in st.session_state or not st.session_state['all_years_in_data']:
             st.warning(current_translations["no_data_for_selected_filters"])
         else:
-            # ... (các bộ lọc) ...
+            # Lấy default year mode từ config (đã được xử lý trong read_configs để luôn là string lowercase)
+            default_year_mode_from_config = st.session_state['config_data'].get('year_mode_config', 'single year')
+            
+            # Set index mặc định cho selectbox dựa trên giá trị từ config
+            default_year_mode_index = 0
+            if default_year_mode_from_config == 'year over year':
+                default_year_mode_index = 1
 
+            standard_report_year_mode = st.selectbox(
+                current_translations["year_mode_selection"],
+                options=[current_translations["single_year"], current_translations["year_over_year"]],
+                index=default_year_mode_index, # <-- Đảm bảo index hợp lệ
+                key="standard_report_year_mode"
+            )
+
+            # Khởi tạo các biến lựa chọn
+            selected_years = []
+            selected_month_standard = None
+            selected_projects_standard = []
+
+            # Lấy giá trị mặc định cho năm từ config
+            default_year_config = st.session_state['config_data'].get('default_year', datetime.datetime.now().year)
+            # Đảm bảo default_year_config tồn tại trong all_years_in_data trước khi tìm index
+            default_year_index = st.session_state['all_years_in_data'].index(default_year_config) if default_year_config in st.session_state['all_years_in_data'] else 0
+
+            # Lấy giá trị mặc định cho tháng từ config
+            default_month_config = st.session_state['config_data'].get('default_month', datetime.datetime.now().strftime('%B'))
+            # Đảm bảo default_month_config tồn tại trong all_months_in_data trước khi tìm index
+            default_month_index = st.session_state['all_months_in_data'].index(default_month_config) if default_month_config in st.session_state['all_months_in_data'] else 0
+            
+            # Single Year Mode
+            if standard_report_year_mode == current_translations["single_year"]:
+                selected_year = st.selectbox(
+                    current_translations["select_year"],
+                    options=st.session_state['all_years_in_data'],
+                    index=default_year_index, # <-- Đảm bảo index hợp lệ
+                    key="standard_select_year"
+                )
+                selected_years = [selected_year] # Cho chế độ một năm
+                
+                selected_month_standard = st.selectbox(
+                    current_translations["select_month"],
+                    options=st.session_state['all_months_in_data'],
+                    index=default_month_index, # <-- Đảm bảo index hợp lệ
+                    key="standard_select_month"
+                )
+            # Year Over Year Mode
+            else: # standard_report_year_mode == current_translations["year_over_year"]
+                col_curr_year, col_prev_year = st.columns(2)
+                with col_curr_year:
+                    selected_current_year = st.selectbox(
+                        current_translations["select_current_year"],
+                        options=st.session_state['all_years_in_data'],
+                        index=default_year_index, # <-- Đảm bảo index hợp lệ
+                        key="standard_select_current_year"
+                    )
+                with col_prev_year:
+                    all_years_except_current = [y for y in st.session_state['all_years_in_data'] if y != selected_current_year]
+                    
+                    selected_previous_year = None
+                    if all_years_except_current:
+                        # Cố gắng tìm năm trước mặc định (default_year_config - 1)
+                        default_prev_year_candidate = default_year_config - 1
+                        default_prev_year_index = 0
+                        if default_prev_year_candidate in all_years_except_current:
+                            default_prev_year_index = all_years_except_current.index(default_prev_year_candidate)
+                        
+                        selected_previous_year = st.selectbox(
+                            current_translations["select_previous_year"],
+                            options=all_years_except_current,
+                            index=default_prev_year_index, # <-- Đảm bảo index hợp lệ
+                            key="standard_select_previous_year"
+                        )
+                    else:
+                        st.info("Không có năm trước để so sánh.")
+                        # selected_previous_year sẽ vẫn là None hoặc bạn có thể đặt một giá trị placeholder
+
+                selected_years = [selected_current_year]
+                if selected_previous_year:
+                    selected_years.append(selected_previous_year)
+
+                selected_month_standard = st.selectbox(
+                    current_translations["select_month"],
+                    options=st.session_state['all_months_in_data'],
+                    index=default_month_index, # <-- Đảm bảo index hợp lệ
+                    key="standard_select_month_yoy"
+                )
+
+            # Lấy các dự án mặc định từ config, nếu không có thì lấy tất cả
+            default_projects_from_config = st.session_state['config_data'].get('default_projects_filter', [])
+            
+            # Đảm bảo các dự án mặc định có tồn tại trong dữ liệu thô
+            valid_default_projects = [
+                p for p in default_projects_from_config if p in st.session_state['all_project_names']
+            ]
+            # Nếu không có dự án mặc định hợp lệ, hoặc config không cung cấp, chọn tất cả các dự án
+            if not valid_default_projects:
+                valid_default_projects = st.session_state['all_project_names']
+
+            selected_projects_standard = st.multiselect(
+                current_translations["select_project"],
+                options=st.session_state['all_project_names'],
+                default=valid_default_projects, # <-- Đảm bảo default là list các giá trị hợp lệ
+                key="standard_select_project"
+            )
+            
             if st.button(current_translations["apply_filters"], key="apply_standard_filters"):
-                if not selected_projects_standard or not selected_years or not selected_month_standard:
-                    st.warning("Please select at least one project, a year, and a month.")
+                # Thêm kiểm tra nếu selected_previous_year là None trong YoY mode
+                if standard_report_year_mode == current_translations["year_over_year"] and selected_previous_year is None:
+                    st.warning("Vui lòng chọn cả Năm Hiện tại và Năm Trước để so sánh YoY.")
+                elif not selected_projects_standard or not selected_years or not selected_month_standard:
+                    st.warning("Please select at least one project, a year (or years), and a month.")
                 else:
                     filtered_df_standard = apply_filters(
                         st.session_state['raw_df'],
@@ -313,13 +430,13 @@ if st.session_state.authenticated: # Đảm bảo chỉ đọc file sau khi xác
                         # Export options
                         col_excel_std, col_pdf_std = st.columns(2)
                         
-                        with col_excel_std: # <--- CÓ THỂ LÀ DÒNG 380 CỦA BẠN (hoặc tương tự)
+                        with col_excel_std: 
                             if st.button(current_translations["export_excel"], key="export_standard_excel_btn"):
                                 with st.spinner(current_translations["loading_charts_data"]):
                                     try:
                                         excel_buffer = export_standard_report_excel(
                                             filtered_df_standard,
-                                            st.session_state['config_data'],
+                                            st.session_state['config_data'], # Truyền config_data vào
                                             current_translations,
                                             standard_report_year_mode == current_translations["year_over_year"]
                                         )
@@ -333,8 +450,8 @@ if st.session_state.authenticated: # Đảm bảo chỉ đọc file sau khi xác
                                         st.success(current_translations["export_success"])
                                     except Exception as e:
                                         st.error(current_translations["export_error"].format(error=e))
-                        with col_pdf_std: # <--- DÒNG NÀY RẤT CÓ THỂ LÀ DÒNG 380
-                            if st.button(current_translations["export_pdf"], key="export_standard_pdf_btn"): # <--- DÒNG 381
+                        with col_pdf_std: 
+                            if st.button(current_translations["export_pdf"], key="export_standard_pdf_btn"): 
                                 with st.spinner(current_translations["loading_charts_data"]):
                                     try:
                                         pdf_buffer = export_standard_report_pdf(
@@ -353,41 +470,78 @@ if st.session_state.authenticated: # Đảm bảo chỉ đọc file sau khi xác
                                         st.success(current_translations["export_success"])
                                     except Exception as e:
                                         st.error(current_translations["export_error"].format(error=e))
-                    # Dòng else đã bị xóa khỏi vị trí này
-
+                    # Dòng else đã bị xóa khỏi vị trí này - Bỏ dòng else này đi là đúng
+            
     with tab3:
         st.header(current_translations["comparison_report_tab"])
         if 'all_years_in_data' not in st.session_state or not st.session_state['all_years_in_data']:
             st.warning(current_translations["no_data_for_selected_filters"])
         else:
+            # Lấy default year từ config
+            default_year_comp_config = st.session_state['config_data'].get('default_year', datetime.datetime.now().year)
+            # Đảm bảo default_year_comp_config tồn tại trong all_years_in_data trước khi tìm index
+            default_year_comp_index = st.session_state['all_years_in_data'].index(default_year_comp_config) if default_year_comp_config in st.session_state['all_years_in_data'] else 0
+
             selected_year_comp = st.selectbox(
                 current_translations["select_year"],
                 options=st.session_state['all_years_in_data'],
+                index=default_year_comp_index, # <-- Đảm bảo index hợp lệ
                 key="comparison_select_year"
             )
 
             col_report_month, col_comp_month = st.columns(2)
             with col_report_month:
+                # Lấy default month từ config cho tháng báo cáo
+                default_reporting_month_config = st.session_state['config_data'].get('default_month', datetime.datetime.now().strftime('%B'))
+                default_reporting_month_index = st.session_state['all_months_in_data'].index(default_reporting_month_config) if default_reporting_month_config in st.session_state['all_months_in_data'] else 0
+
                 selected_reporting_month = st.selectbox(
                     current_translations["select_reporting_month"],
                     options=st.session_state['all_months_in_data'],
+                    index=default_reporting_month_index, # <-- Đảm bảo index hợp lệ
                     key="comparison_reporting_month"
                 )
             with col_comp_month:
-                # Lọc bỏ tháng báo cáo khỏi lựa chọn tháng so sánh
                 available_comp_months = [m for m in st.session_state['all_months_in_data'] if m != selected_reporting_month]
+                
+                # Cố gắng đặt tháng so sánh mặc định là tháng trước tháng báo cáo, hoặc tháng đầu tiên có sẵn
+                default_comparison_month_config = None
+                if selected_reporting_month:
+                    month_order_list = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
+                    try:
+                        report_month_idx = month_order_list.index(selected_reporting_month)
+                        if report_month_idx > 0:
+                            default_comparison_month_config = month_order_list[report_month_idx - 1]
+                    except ValueError:
+                        pass # Tháng không hợp lệ, sẽ dùng mặc định đầu tiên
+                
+                default_comparison_month_index = 0
+                if default_comparison_month_config and default_comparison_month_config in available_comp_months:
+                    default_comparison_month_index = available_comp_months.index(default_comparison_month_config)
+                elif available_comp_months:
+                    default_comparison_month_index = 0
+                else:
+                    default_comparison_month_index = -1 # Không có lựa chọn nào
+
                 selected_comparison_month = st.selectbox(
                     current_translations["select_comparison_month"],
                     options=available_comp_months,
-                    # Đặt mặc định là tháng đầu tiên có sẵn nếu có
-                    index=0 if available_comp_months else 0,
+                    index=default_comparison_month_index if default_comparison_month_index != -1 else 0, # Cần đảm bảo index hợp lệ
                     key="comparison_comparison_month"
                 )
+
+            # Lấy các dự án mặc định từ config, nếu không có thì lấy tất cả
+            default_projects_from_config_comp = st.session_state['config_data'].get('default_projects_filter', [])
+            valid_default_projects_comp = [
+                p for p in default_projects_from_config_comp if p in st.session_state['all_project_names']
+            ]
+            if not valid_default_projects_comp:
+                valid_default_projects_comp = st.session_state['all_project_names']
 
             selected_project_comparison = st.multiselect(
                 current_translations["select_project"],
                 options=st.session_state['all_project_names'],
-                default=st.session_state['all_project_names'],
+                default=valid_default_projects_comp, # <-- Đảm bảo default là list các giá trị hợp lệ
                 key="comparison_select_project"
             )
 
@@ -413,7 +567,7 @@ if st.session_state.authenticated: # Đảm bảo chỉ đọc file sau khi xác
                             # Export options for comparison report
                             col_excel_comp, col_pdf_comp = st.columns(2)
                             with col_excel_comp:
-                                if st.button(current_translations["export_excel"], key="export_comparison_excel_btn"): # Đổi key
+                                if st.button(current_translations["export_excel"], key="export_comparison_excel_btn"): 
                                     with st.spinner(current_translations["loading_charts_data"]):
                                         try:
                                             excel_buffer = export_comparison_report_excel(
@@ -434,7 +588,7 @@ if st.session_state.authenticated: # Đảm bảo chỉ đọc file sau khi xác
                                         except Exception as e:
                                             st.error(current_translations["export_error"].format(error=e))
                             with col_pdf_comp:
-                                if st.button(current_translations["export_pdf"], key="export_comparison_pdf_btn"): # Đổi key
+                                if st.button(current_translations["export_pdf"], key="export_comparison_pdf_btn"): 
                                     with st.spinner(current_translations["loading_charts_data"]):
                                         try:
                                             pdf_buffer = export_comparison_report_pdf(
