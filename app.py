@@ -68,6 +68,7 @@ translations = {
         "percentage_change": "Percentage Change",
         "config_not_found": "Configuration sheet '{sheet_name}' not found in Excel file.",
         "raw_data_not_found": "Raw Data sheet not found in Excel file."
+        "reading_processing_data": "Reading and processing data..." 
     },
     "vi": {
         "app_title": "Ứng dụng Báo cáo Thời gian Triac",
@@ -123,6 +124,7 @@ translations = {
         "percentage_change": "Phần trăm thay đổi",
         "config_not_found": "Sheet cấu hình '{sheet_name}' không tìm thấy trong file Excel.",
         "raw_data_not_found": "Sheet Raw Data không tìm thấy trong file Excel."
+        "reading_processing_data": "Đang đọc và xử lý dữ liệu..."
     }
 }
 
